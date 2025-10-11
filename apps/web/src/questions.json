@@ -1,12 +1,12 @@
 [
-  {
-    "id": 1,
-    "text": "I prefer to do things the same way over and over again.",
-    "options": [
-      "Definitely agree",
-      "Slightly agree",
-      "Slightly disagree",
-      "Definitely disagree"
-    ]
-  }
+  { "id": 1, "text": "I prefer to do things the same way over and over again.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 2, "text": "I frequently notice small sounds when others do not.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 3, "text": "I find it easy to do more than one thing at once.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 4, "text": "If there is an interruption, I can switch back to what I was doing very quickly.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 5, "text": "I find it easy to 'read between the lines' when someone is talking to me.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 6, "text": "I know how to tell if someone listening to me is getting bored.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 7, "text": "When I’m reading a story, I find it difficult to work out the characters’ intentions.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 8, "text": "I prefer to do things on my own rather than with others.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 9, "text": "I find social situations easy.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] },
+  { "id": 10, "text": "I find it easy to work out what someone is thinking or feeling just by looking at their face.", "options": ["Definitely agree", "Slightly agree", "Slightly disagree", "Definitely disagree"] }
 ]
