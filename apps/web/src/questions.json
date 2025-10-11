@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "text": "I prefer to do things the same way over and over again.",
+    "options": [
+      "Definitely agree",
+      "Slightly agree",
+      "Slightly disagree",
+      "Definitely disagree"
+    ]
+  }
+]
