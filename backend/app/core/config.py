@@ -1,8 +1,7 @@
-# apps/api/app/settings.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    # Load apps/api/.env and ignore any extra keys we don't model yet.
+    # Load backend/.env and ignore any extra keys we don't model yet.
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

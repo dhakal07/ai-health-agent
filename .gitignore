@@ -1,16 +1,19 @@
+# Node
+frontend/node_modules
+frontend/.vite
+*.log
 
-# Environment and local configs
-.env
-apps/api/.env
-apps/web/.env
+# Python
+backend/.venv
+backend/venv
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
 
-# Node and Python dependencies
-node_modules/
-.venv/
-__pycache__/
-*.pyc
+# Builds
+frontend/dist
 
-# IDE / OS
-.vscode/
-.DS_Store
-
+# Env (never commit)
+*.env
+backend/.env
+frontend/.env
