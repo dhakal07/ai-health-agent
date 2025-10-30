@@ -1,0 +1,87 @@
+[
+  {
+    "id": "sleep_basics",
+    "title": "Sleep basics",
+    "tags": ["sleep", "insomnia", "bedtime", "circadian", "wake"],
+    "summary": "Healthy sleep habits that improve quality and consistency.",
+    "advice": [
+      "Keep a consistent sleep/wake time, even on weekends.",
+      "Make your room cool, dark, and quiet; avoid screens for 60 minutes before bed.",
+      "Limit caffeine to earlier in the day; try a wind-down routine.",
+      "If you can’t sleep, get out of bed and do a calm activity until sleepy again."
+    ]
+  },
+  {
+    "id": "anxiety_coping",
+    "title": "Coping with stress/anxiety",
+    "tags": ["anxiety", "panic", "worry", "stress", "overwhelmed"],
+    "summary": "Quick techniques to lower arousal and manage worry.",
+    "advice": [
+      "Try paced breathing: inhale 4s, hold 4s, exhale 6–8s for 2–3 minutes.",
+      "Short, light movement breaks help downshift stress.",
+      "Reduce stimulants (caffeine/energy drinks) when anxious.",
+      "If persistent or interfering with life, speak with a licensed professional."
+    ]
+  },
+  {
+    "id": "headache_care",
+    "title": "Headache self-care and red flags",
+    "tags": ["headache", "migraine", "tension", "pain"],
+    "summary": "Self-care and when to seek in-person care.",
+    "advice": [
+      "Hydrate, rest in a quiet dark room; consider simple over-the-counter pain relief if appropriate.",
+      "Track triggers: sleep, stress, dehydration, skipped meals.",
+      "Red flags: sudden worst headache, head injury, fever with stiff neck, vision/speech changes, weakness—seek urgent care."
+    ]
+  },
+  {
+    "id": "cold_flu",
+    "title": "Cold/flu home care",
+    "tags": ["cold", "flu", "cough", "sore throat", "runny nose", "congestion"],
+    "summary": "Typical home care and warning signs.",
+    "advice": [
+      "Rest and fluids; consider OTC symptom relief as appropriate.",
+      "Seek care if breathing trouble, chest pain, confusion, dehydration, fever > 3–4 days, or rapid worsening."
+    ]
+  },
+  {
+    "id": "nutrition_basics",
+    "title": "Nutrition basics",
+    "tags": ["diet", "nutrition", "eat healthy", "weight", "protein", "vegetables"],
+    "summary": "Simple plate method for balanced meals.",
+    "advice": [
+      "Build plates with vegetables, lean protein, whole grains, and healthy fats.",
+      "Prefer minimally processed foods; make small consistent changes."
+    ]
+  },
+  {
+    "id": "exercise_basics",
+    "title": "Movement and exercise",
+    "tags": ["exercise", "workout", "steps", "physical activity", "strength"],
+    "summary": "Practical movement targets.",
+    "advice": [
+      "Aim ~150 minutes/week of moderate activity plus two strength sessions.",
+      "Start gently and progress gradually; any movement helps."
+    ]
+  },
+  {
+    "id": "hydration",
+    "title": "Hydration",
+    "tags": ["hydrate", "water", "fluids", "dehydration"],
+    "summary": "Why and how to hydrate.",
+    "advice": [
+      "Sip water regularly; more in heat, illness, or exercise.",
+      "Urine pale-straw color is a simple hydration check."
+    ]
+  },
+  {
+    "id": "autism_info",
+    "title": "Autism — general information",
+    "tags": ["autism", "asd", "spectrum"],
+    "summary": "General information only; diagnosis requires professionals.",
+    "advice": [
+      "Autism involves differences in communication, social interaction, and sensory processing.",
+      "Assessments are done by trained clinicians; community resources and support groups can help."
+    ]
+  }
+]

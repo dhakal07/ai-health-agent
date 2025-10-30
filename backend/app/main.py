@@ -8,10 +8,10 @@ from bson import ObjectId
 from pymongo.errors import PyMongoError
 
 from app.core.config import settings
-from app.db.mongodb import sessions, answers  # memory fallback handled inside
+from app.db.mongodb import sessions, answers, DB_MODE
 
 # ---------- FastAPI app & CORS ----------
-app = FastAPI(title="AI Health Agent API", version="1.1")
+app = FastAPI(title="AI Health Agent API", version="1.2")
 
 origins: List[str] = list({
     getattr(settings, "ALLOWED_ORIGIN", "http://localhost:5173"),
@@ -52,13 +52,13 @@ def root():
 
 @app.get("/health")
 def health():
-    """Report API and (best-effort) DB status without hanging."""
+    """Report API and (best-effort) DB status + mode."""
     try:
-        sessions.database.client.admin.command("ping")  # works for both real/memory shim
-        db_ok = True
+        # works for both real client and memory shim
+        ok = True
     except Exception:
-        db_ok = False
-    return {"status": "ok", "db": db_ok}
+        ok = False
+    return {"status": "ok", "db": (DB_MODE == "mongo"), "mode": DB_MODE}
 
 @app.post("/session/start")
 def start_session(body: StartSessionBody):
@@ -73,14 +73,16 @@ def start_session(body: StartSessionBody):
         res = sessions.insert_one(doc)
     except PyMongoError as e:
         raise HTTPException(status_code=503, detail=f"database_unavailable: {e.__class__.__name__}")
-    return {"session_id": str(getattr(res, "inserted_id", res))}
+    # memory returns string id, pymongo returns ObjectId
+    sid = getattr(res, "inserted_id", res)
+    return {"session_id": str(sid)}
 
 @app.post("/answer")
 def post_answer(body: PostAnswerBody):
+    # accept memory ids (string) and real ObjectIds
     try:
         sid = ObjectId(body.session_id)
     except Exception:
-        # memory fallback uses string ids; allow pass-through
         sid = body.session_id
 
     try:
@@ -95,7 +97,6 @@ def post_answer(body: PostAnswerBody):
         try:
             sessions.update_one({"_id": sid}, {"$set": {"last_activity": datetime.utcnow()}})
         except Exception:
-            # memory mode may not match this exactly; ignore
             pass
     except PyMongoError as e:
         raise HTTPException(status_code=503, detail=f"database_unavailable: {e.__class__.__name__}")
@@ -107,15 +108,39 @@ def list_answers(session_id: str):
         try:
             sid = ObjectId(session_id)
         except Exception:
-            sid = session_id  # memory id
+            sid = session_id
         docs = list(answers.find({"session_id": sid}).sort("created_at", 1))
     except PyMongoError as e:
         raise HTTPException(status_code=503, detail=f"database_unavailable: {e.__class__.__name__}")
 
     for d in docs:
         d.pop("_id", None)
-        # for memory mode, keep as-is
     return {"ok": True, "answers": docs}
+
+def _score_and_note(items):
+    """
+    Very simple scoring:
+    - count of 'agree' style answers / total
+    - short, safe educational note (not diagnostic)
+    """
+    total = len(items)
+    agree_opts = {"Definitely agree", "Slightly agree"}
+    score = sum(1 for a in items if (a.get("mapped_option") in agree_opts))
+    ratio = round((score / total), 2) if total else 0.0
+
+    if ratio >= 0.8:
+        note = "You show a strong preference for routine and consistency."
+    elif ratio >= 0.5:
+        note = "You show a moderate preference for structure and predictability."
+    else:
+        note = "You appear comfortable with change and flexible routines."
+
+    # keep the language educational and non-diagnostic
+    guidance = (
+        "This is an educational reflection based on your answers. "
+        "If you have concerns about your behavior or well-being, consider speaking with a qualified professional."
+    )
+    return {"score": score, "total": total, "ratio": ratio, "note": note, "guidance": guidance}
 
 @app.post("/session/end")
 def end_session(body: EndSessionBody):
@@ -124,6 +149,7 @@ def end_session(body: EndSessionBody):
             sid = ObjectId(body.session_id)
         except Exception:
             sid = body.session_id
+
         cursor = answers.find({"session_id": sid}).sort("created_at", 1)
         items = [
             {
@@ -141,7 +167,8 @@ def end_session(body: EndSessionBody):
         raise HTTPException(status_code=503, detail=f"database_unavailable: {e.__class__.__name__}")
 
     summary = {"count": len(items), "answers": items}
-    return {"summary": summary}
+    scoring = _score_and_note(items)
+    return {"summary": summary, "analysis": scoring}
 
 # ---------- Smarter but safe /chat ----------
 DISCLAIMER = (
@@ -163,93 +190,81 @@ def _contains_any(text: str, bag) -> bool:
 def _triage(text: str) -> str:
     t = text.lower().strip()
 
-    # emergencies
     if _contains_any(t, EMERGENCY_SIGNS):
         return (
             f"{DISCLAIMER} Your message mentions potentially urgent warning signs. "
             "Please call your local emergency number or go to the nearest emergency department now."
         )
 
-    # common topics
     if any(k in t for k in ["fever", "cold", "cough", "sore throat", "flu", "runny nose", "congestion"]):
         return (
-            f"{DISCLAIMER} For typical cold/flu: rest, fluids, and over-the-counter symptom relief "
-            "can help. Red flags: trouble breathing, chest pain, confusion, dehydration, "
-            "fever lasting more than 3–4 days, or symptoms that rapidly worsen — seek in-person care."
+            f"{DISCLAIMER} For typical cold/flu: rest, fluids, and over-the-counter symptom relief can help. "
+            "Red flags: breathing trouble, chest pain, confusion, dehydration, fever >3–4 days, or rapid worsening."
         )
 
     if any(k in t for k in ["allergy", "allergies", "hay fever", "pollen"]):
         return (
-            f"{DISCLAIMER} Allergy relief often includes avoiding triggers, saline rinses, "
-            "and antihistamines. If you develop wheezing or breathing problems, seek care promptly."
+            f"{DISCLAIMER} Allergy tips: avoid triggers, consider saline rinses and common antihistamines. "
+            "If wheezing or breathing problems develop, seek care promptly."
         )
 
-    if any(k in t for k in ["stomach", "nausea", "vomit", "vomiting", "diarrhea", "gastro"]):
+    if any(k in t for k in ["stomach", "nausea", "vomit", "diarrhea", "gastro"]):
         return (
-            f"{DISCLAIMER} For mild stomach bugs: hydrate with small, frequent sips; consider oral "
-            "rehydration solutions. Seek care if there is blood, signs of dehydration, high fever, "
-            "severe belly pain, or symptoms last more than 2–3 days."
+            f"{DISCLAIMER} For mild stomach upset: hydrate with small frequent sips; oral rehydration can help. "
+            "Seek care if there is blood, high fever, severe pain, dehydration, or symptoms >2–3 days."
         )
 
     if any(k in t for k in ["headache", "migraine"]):
         return (
-            f"{DISCLAIMER} Typical headaches improve with rest, hydration, and over-the-counter pain "
-            "relief. Red flags: sudden severe or “worst ever” headache, head injury, fever with stiff neck, "
-            "vision or speech problems, weakness, or confusion — seek urgent care."
+            f"{DISCLAIMER} Headache tips: rest, hydrate, and consider simple pain relief if appropriate. "
+            "Red flags: sudden worst headache, head injury, fever with stiff neck, vision/speech changes, weakness."
         )
 
     if any(k in t for k in ["anxiety", "panic", "worry", "stress"]):
         return (
-            f"{DISCLAIMER} For anxiety: try slow breathing (in 4s, hold 4s, out 6–8s for a few minutes), "
-            "brief movement, and limiting caffeine. If anxiety interferes with daily life, consider talking "
-            "to a licensed therapist or your clinician."
+            f"{DISCLAIMER} Try slow breathing (in 4s, hold 4s, out 6–8s), brief movement, and limiting caffeine. "
+            "If anxiety interferes with life, a licensed therapist can help."
         )
 
     if any(k in t for k in ["depress", "low mood", "hopeless"]):
         return (
-            f"{DISCLAIMER} Low mood can improve with routine, sunlight, movement, and social contact. "
-            "For persistent symptoms or thoughts of self-harm, contact local crisis services or your clinician."
+            f"{DISCLAIMER} Routines, sunlight, movement, and social contact can help mood. "
+            "If thoughts of self-harm occur, contact local crisis services or a clinician immediately."
         )
 
     if any(k in t for k in ["sleep", "insomnia"]):
         return (
-            f"{DISCLAIMER} Sleep tips: consistent schedule, dark/cool/quiet room, limit screens and heavy "
-            "meals before bed, and keep caffeine earlier in the day. If snoring with pauses or daytime "
-            "sleepiness, discuss with a clinician."
+            f"{DISCLAIMER} Sleep tips: consistent schedule, cool/dark/quiet room, screens off before bed, "
+            "keep caffeine earlier in the day. If snoring with pauses, discuss with a clinician."
         )
 
     if any(k in t for k in ["diet", "nutrition", "eat healthy", "weight", "obesity"]):
         return (
-            f"{DISCLAIMER} A balanced plate (vegetables, lean protein, whole grains, healthy fats) and "
-            "fewer ultra-processed foods can help. Small, steady changes beat extreme diets. For medical "
-            "conditions, a registered dietitian can tailor a plan."
+            f"{DISCLAIMER} Balanced plate: vegetables, lean protein, whole grains, healthy fats; fewer ultra-processed foods. "
+            "Small steady changes beat extreme diets. A registered dietitian can tailor a plan."
         )
 
     if any(k in t for k in ["exercise", "workout", "physical activity"]):
         return (
-            f"{DISCLAIMER} Aim for about 150 minutes per week of moderate activity plus two days of "
-            "strength training if you can. Start gently and increase gradually; any movement helps."
+            f"{DISCLAIMER} Aim for ~150 min/week of moderate activity plus two days of strength training if you can. "
+            "Start gently and increase gradually; any movement helps."
         )
 
     if any(k in t for k in ["vaccine", "vaccination", "immunization"]):
         return (
-            f"{DISCLAIMER} Vaccines reduce risk of severe illness. Recommended schedules depend on age, "
-            "health, and local guidelines. Your clinician or public health site can provide the latest "
-            "advice for your region."
+            f"{DISCLAIMER} Vaccines reduce risk of severe illness. Recommendations depend on age, health, and local guidance. "
+            "Your clinician or public health site can provide the latest advice."
         )
 
     if any(k in t for k in ["autism", "asd", "spectrum"]):
         return (
-            f"{DISCLAIMER} Autism involves differences in communication, social interaction, and sensory "
-            "processing. Only trained professionals can diagnose it. If you have questions, I can share "
-            "general information and resources."
+            f"{DISCLAIMER} Autism involves differences in communication, social interaction, and sensory processing. "
+            "Only trained professionals can diagnose it. I can share general information and resources."
         )
 
-    # small talk
     if t in {"hi", "hello", "hey"} or "hello" in t or "hi " in t:
         return f"{DISCLAIMER} Hello! How are you feeling today? I can share general wellness information."
 
-    # default
     return (
         f"{DISCLAIMER} Tell me what general topic you want to know about (sleep, headaches, anxiety, "
         "cold/flu, vaccines, nutrition, exercise, etc.)."
