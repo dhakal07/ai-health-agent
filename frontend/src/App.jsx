@@ -1,6 +1,9 @@
+// frontend/src/App.jsx
 import { useEffect, useRef, useState } from "react";
 import questions from "./features/aq/questions.json";
-import { startSession, postAnswer, endSession, getAnswers, ping, chat, API_BASE } from "./services/api/client";
+import { startSession, postAnswer, endSession, ping, API_BASE } from "./services/api/client";
+import DoctorAvatar from "./features/avatar/DoctorAvatar";
+import ChatBox from "./features/ChatBox";
 
 const EMPATHY = [
   "Take your time; there’s no rush.",
@@ -25,11 +28,11 @@ export default function App() {
   const [sessionId, setSessionId] = useState(null);
   const [idx, setIdx] = useState(0);
   const [answersMap, setAnswersMap] = useState({});
-  const [summary, setSummary] = useState(null);       // { summary, analysis }
-  const [aiInput, setAiInput] = useState("");
-  const [aiAnswer, setAiAnswer] = useState("");
+  const [summary, setSummary] = useState(null);
+
   const recRef = useRef(null);
   const empathyTimerRef = useRef(null);
+  const utteranceRef = useRef(null);
 
   const question = questions[idx];
   const progress = `${idx + 1} / ${questions.length}`;
@@ -38,12 +41,27 @@ export default function App() {
     console.log("[API_BASE]", API_BASE);
   }, []);
 
-  // ---------- speech synthesis ----------
+  // ---------- speech synthesis (with avatar sync) ----------
   const speak = (text) => {
+    if (utteranceRef.current) {
+      speechSynthesis.cancel();
+    }
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1; u.pitch = 1;
-    u.onstart = () => setStatus("Speaking...");
-    u.onend = () => setStatus("Ready");
+    u.rate = 1;
+    u.pitch = 1;
+    u.onstart = () => {
+      setStatus("Speaking...");
+      window.dispatchEvent(new Event("doctor_voice_start"));
+    };
+    u.onend = () => {
+      setStatus("Ready");
+      utteranceRef.current = null;
+      window.dispatchEvent(new Event("doctor_voice_end"));
+    };
+    u.onerror = () => {
+      window.dispatchEvent(new Event("doctor_voice_end"));
+    };
+    utteranceRef.current = u;
     speechSynthesis.speak(u);
   };
 
@@ -57,12 +75,12 @@ export default function App() {
     return null;
   };
 
-  // --- Empathy timer: if user is silent/idle for 10s, speak supportively
   const startEmpathyTimer = () => {
     clearTimeout(empathyTimerRef.current);
     empathyTimerRef.current = setTimeout(() => {
       if (!listening) return;
-      speak(EMPATHY[Math.floor(Math.random() * EMPATHY.length)]);
+      const msg = EMPATHY[Math.floor(Math.random() * EMPATHY.length)];
+      speak(msg);
     }, 10000);
   };
 
@@ -78,7 +96,11 @@ export default function App() {
     rec.interimResults = true;
     rec.maxAlternatives = 1;
 
-    rec.onstart = () => { setListening(true); setStatus("Listening..."); startEmpathyTimer(); };
+    rec.onstart = () => {
+      setListening(true);
+      setStatus("Listening...");
+      startEmpathyTimer();
+    };
     rec.onresult = (e) => {
       let finalText = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -94,16 +116,20 @@ export default function App() {
     };
     rec.onerror = (e) => setStatus("Error: " + e.error);
     rec.onend = () => {
-      setListening(false); setStatus("Ready");
+      setListening(false);
+      setStatus("Ready");
       clearTimeout(empathyTimerRef.current);
-      if (selected === "(none)") speak(EMPATHY[Math.floor(Math.random()*EMPATHY.length)]);
+      if (selected === "(none)") speak(EMPATHY[Math.floor(Math.random() * EMPATHY.length)]);
     };
     return rec;
   };
 
   const startListening = () => {
     if (!recRef.current) recRef.current = initRecognition();
-    if (recRef.current) { setTranscript(""); recRef.current.start(); }
+    if (recRef.current) {
+      setTranscript("");
+      recRef.current.start();
+    }
   };
   const stopListening = () => {
     if (recRef.current && listening) recRef.current.stop();
@@ -124,10 +150,9 @@ export default function App() {
       setSessionId(s.session_id);
       setConsented(true);
       setStatus("Session started");
-      // preload answer if revisiting
-      const prev = answersMap[question.id];
-      setSelected(prev || "(none)");
+      setSelected(answersMap[question.id] || "(none)");
       setSummary(null);
+      speak("Welcome! Let's begin your health screening.");
     } catch (e) {
       console.error(e);
       setStatus("Failed to start session");
@@ -147,7 +172,10 @@ export default function App() {
   };
 
   const handleConfirm = async () => {
-    if (!sessionId) { alert("No session yet. Click I Agree first."); return; }
+    if (!sessionId) {
+      alert("No session yet.");
+      return;
+    }
     const choice = selected;
     setAnswersMap(prev => ({ ...prev, [question.id]: choice }));
     setStatus("Saving answer…");
@@ -160,13 +188,13 @@ export default function App() {
         const nextQ = questions[nextIdx];
         setSelected(answersMap[nextQ.id] || "(none)");
         setTranscript("");
+        speak(nextQ.text + " Please respond with your level of agreement.");
       } else {
         speak("Great job. You reached the end. You can review or finish.");
       }
     } catch (e) {
       console.error(e);
       setStatus("Failed to save");
-      alert("Save failed. See console / backend logs.");
     }
   };
 
@@ -199,7 +227,7 @@ export default function App() {
     try {
       const res = await endSession(sessionId);
       setStatus("Finished");
-      setSummary(res); // { summary: {count, answers}, analysis: {score,total,ratio,note,guidance} }
+      setSummary(res);
       const say = `Thank you for completing the questions. ${res.analysis.note}. ${res.analysis.guidance}`;
       speak(say);
     } catch (e) {
@@ -208,33 +236,25 @@ export default function App() {
     }
   };
 
-  // ---------- chat ----------
-  const askAI = async () => {
-    try {
-      const data = await chat(aiInput);
-      if (!data?.ok) {
-        alert("AI error");
-        return;
-      }
-      setAiAnswer(data.answer);
-    } catch (e) {
-      console.error(e);
-      alert("Network error calling AI.");
-    }
-  };
-
   // ---------- consent screen ----------
   if (!consented) {
     return (
-      <main style={{maxWidth:720, margin:"2rem auto", padding:"1rem", fontFamily:"system-ui"}}>
+      <main style={{ maxWidth: 720, margin: "2rem auto", padding: "1rem", fontFamily: "system-ui" }}>
         <h1>AI Health Agent (Prototype)</h1>
-        <p style={{opacity:.8}}>
+        <p style={{ opacity: .8 }}>
           This educational demo uses your microphone locally in the browser to capture spoken
           answers to sample screening questions. This is not medical advice.
         </p>
-        <div style={{display:"flex", gap:8, marginTop:8}}>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={begin}>I Agree</button>
-          <button onClick={async ()=>{ const res = await ping(); alert("Ping /health -> " + JSON.stringify(res)); }}>Ping API</button>
+          <button
+            onClick={async () => {
+              const res = await ping();
+              alert("Ping /health -> " + JSON.stringify(res));
+            }}
+          >
+            Ping API
+          </button>
           <button onClick={() => alert("You declined. Closing demo.")}>I Do Not Agree</button>
         </div>
         <div style={{ marginTop: 12, fontSize: 12, color: "#666" }}>
@@ -245,81 +265,125 @@ export default function App() {
   }
 
   return (
-    <main style={{maxWidth:900, margin:"2rem auto", padding:"1rem", fontFamily:"system-ui"}}>
-      <div style={{color:"#22d3ee"}}>{status}{sessionId ? ` · Session: ${sessionId}` : ""}</div>
+    <main
+      style={{
+        maxWidth: 1400,
+        margin: "2rem auto",
+        padding: "1rem",
+        fontFamily: "system-ui",
+        display: "grid",
+        gridTemplateColumns: "400px 1fr",
+        gap: "1.5rem",
+      }}
+    >
+      {/* LEFT: SVG Doctor Avatar */}
+      <div
+        style={{
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          padding: 16,
+          background: "#fff",
+          height: "fit-content",
+        }}
+      >
+        <DoctorAvatar
+          queueSay={(text) => speak(text)}
+          speakingText={""}
+          onStart={() => {}}
+          onEnd={() => {}}
+        />
+      </div>
 
-      <section style={{border:"1px solid #ddd", borderRadius:8, padding:16, marginTop:12}}>
-        <div><strong>Question {progress}</strong></div>
-        <p style={{fontSize:18, marginTop:8}}>{question.text}</p>
-        <div style={{marginTop:8}}>
-          {question.options.map(o => (
-            <button key={o} onClick={() => setSelected(o)} style={{marginRight:8, marginTop:4}}>{o}</button>
-          ))}
+      {/* RIGHT: Full UI */}
+      <div>
+        <div style={{ color: "#22d3ee" }}>
+          {status}
+          {sessionId ? ` · Session: ${sessionId}` : ""}
         </div>
 
-        <div style={{marginTop:10}}>
-          <button onClick={handleAsk}>Ask</button>{" "}
-          <button onClick={startListening} disabled={listening}>Start</button>{" "}
-          <button onClick={stopListening} disabled={!listening}>Stop</button>
-        </div>
-
-        <div style={{marginTop:10}}>
-          <button onClick={goPrev} disabled={idx===0}>Back</button>{" "}
-          <button onClick={skip}>Skip</button>{" "}
-          <button onClick={goNext} disabled={idx===questions.length-1}>Next</button>{" "}
-          <button onClick={handleConfirm} disabled={selected==="(none)"}>Confirm</button>{" "}
-          <button onClick={finish}>Finish</button>
-        </div>
-      </section>
-
-      <section style={{border:"1px solid #ddd", borderRadius:8, padding:16, marginTop:12}}>
-        <h3>Transcript</h3>
-        <div style={{minHeight:48, border:"1px solid #eee", borderRadius:6, padding:8}}>{transcript || "(none)"}</div>
-      </section>
-
-      <section style={{border:"1px solid #ddd", borderRadius:8, padding:16, marginTop:12}}>
-        <h3>Detected Answer</h3>
-        <div style={{minHeight:48, border:"1px solid #eee", borderRadius:6, padding:8}}>{selected}</div>
-      </section>
-
-      {summary && (
-        <section style={{border:"2px solid #4ade80", borderRadius:8, padding:16, marginTop:12, background:"#f6fffb"}}>
-          <h3>Session Summary</h3>
-          <p><strong>Answers saved:</strong> {summary.summary?.count}</p>
-          <p><strong>Score:</strong> {summary.analysis?.score} / {summary.analysis?.total} (ratio {summary.analysis?.ratio})</p>
-          <p style={{marginTop:8}}><strong>Interpretation:</strong> {summary.analysis?.note}</p>
-          <p style={{opacity:.8}}>{summary.analysis?.guidance}</p>
-          <details style={{marginTop:10}}>
-            <summary>Review raw answers</summary>
-            <pre style={{whiteSpace:"pre-wrap"}}>{JSON.stringify(summary.summary?.answers, null, 2)}</pre>
-          </details>
-        </section>
-      )}
-
-      <section style={{border:"1px solid #ddd", borderRadius:8, padding:16, marginTop:12}}>
-        <h3>Ask the AI (General Wellness)</h3>
-        <p style={{opacity:.8, marginTop:4}}>
-          Educational info only — not medical advice.
-        </p>
-        <div style={{display:"flex", gap:8, marginTop:8}}>
-          <input
-            value={aiInput}
-            onChange={e=>setAiInput(e.target.value)}
-            placeholder="e.g., How to improve sleep? Headache red flags?"
-            style={{flex:1, padding:8, border:"1px solid #eee", borderRadius:6}}
-          />
-          <button onClick={askAI}>Ask</button>
-        </div>
-        {aiAnswer && (
-          <div style={{marginTop:10, background:"#fafafa", border:"1px solid #eee", borderRadius:6, padding:10}}>
-            {aiAnswer}
+        <section style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginTop: 12 }}>
+          <div>
+            <strong>Question {progress}</strong>
           </div>
-        )}
-      </section>
+          <p style={{ fontSize: 18, marginTop: 8 }}>{question.text}</p>
+          <div style={{ marginTop: 8 }}>
+            {question.options.map((o) => (
+              <button key={o} onClick={() => setSelected(o)} style={{ marginRight: 8, marginTop: 4 }}>
+                {o}
+              </button>
+            ))}
+          </div>
 
-      <footer style={{marginTop:24, opacity:.7}}>
-        © 2025 – Educational prototype · Not medical advice.
-      </footer>
+          <div style={{ marginTop: 10 }}>
+            <button onClick={handleAsk}>Ask</button>{" "}
+            <button onClick={startListening} disabled={listening}>
+              Start
+            </button>{" "}
+            <button onClick={stopListening} disabled={!listening}>
+              Stop
+            </button>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <button onClick={goPrev} disabled={idx === 0}>
+              Back
+            </button>{" "}
+            <button onClick={skip}>Skip</button>{" "}
+            <button onClick={goNext} disabled={idx === questions.length - 1}>
+              Next
+            </button>{" "}
+            <button onClick={handleConfirm} disabled={selected === "(none)"}>
+              Confirm
+            </button>{" "}
+            <button onClick={finish}>Finish</button>
+          </div>
+        </section>
+
+        <section style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginTop: 12 }}>
+          <h3>Transcript</h3>
+          <div style={{ minHeight: 48, border: "1px solid #eee", borderRadius: 6, padding: 8 }}>
+            {transcript || "(none)"}
+          </div>
+        </section>
+
+        <section style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginTop: 12 }}>
+          <h3>Detected Answer</h3>
+          <div style={{ minHeight: 48, border: "1px solid #eee", borderRadius: 6, padding: 8 }}>
+            {selected}
+          </div>
+        </section>
+
+        {summary && (
+          <section
+            style={{
+              border: "2px solid #4ade80",
+              borderRadius: 8,
+              padding: 16,
+              marginTop: 12,
+              background: "#f6fffb",
+            }}
+          >
+            <h3>Session Summary</h3>
+            <p>
+              <strong>Answers saved:</strong> {summary.summary?.count}
+            </p>
+            <p>
+              <strong>Score:</strong> {summary.analysis?.score} / {summary.analysis?.total}
+            </p>
+            <p style={{ marginTop: 8 }}>
+              <strong>Interpretation:</strong> {summary.analysis?.note}
+            </p>
+            <p style={{ opacity: 0.8 }}>{summary.analysis?.guidance}</p>
+          </section>
+        )}
+
+        {/* NEW: ChatBox with clickable Maps links and avatar voice */}
+        <section style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginTop: 12 }}>
+          <h3>Ask the AI (General Wellness)</h3>
+          <p style={{ opacity: 0.8, marginTop: 4 }}>Educational info only — not medical advice.</p>
+          <ChatBox onSpeak={speak} />
+        </section>
+      </div>
     </main>
   );
 }

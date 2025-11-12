@@ -1,14 +1,13 @@
 /**
  * API client for the AI Health Agent frontend.
- * Reads VITE_API_BASE_URL or VITE_API_BASE; falls back to localhost.
- * Adds a timeout so UI never hangs.
+ * Reads VITE_API_BASE_URL from .env and falls back to localhost.
  */
 const envBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE;
 export const API_BASE = envBase && envBase.trim() ? envBase.trim() : "http://127.0.0.1:8000";
 
 function withTimeout(ms = 8000) {
   const ctl = new AbortController();
-  const id = setTimeout(() => ctl.abort(new Error(`timeout after ${ms}ms`)), ms);
+  const id = setTimeout(() => ctl.abort(`timeout after ${ms}ms`), ms);
   return { signal: ctl.signal, cancel: () => clearTimeout(id) };
 }
 
@@ -30,11 +29,7 @@ async function fetchJSON(url, opts = {}, { timeoutMs = 8000 } = {}) {
 }
 
 export async function ping() {
-  try {
-    return await fetchJSON(`${API_BASE}/health`, { method: "GET" }, { timeoutMs: 4000 });
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
+  return await fetchJSON(`${API_BASE}/health`, { method: "GET" }, { timeoutMs: 4000 });
 }
 
 export async function startSession(locale = "en-US") {
@@ -53,10 +48,6 @@ export async function postAnswer(payload) {
   });
 }
 
-export async function getAnswers(session_id) {
-  return await fetchJSON(`${API_BASE}/session/${session_id}/answers`, { method: "GET" });
-}
-
 export async function endSession(session_id) {
   return await fetchJSON(`${API_BASE}/session/end`, {
     method: "POST",
@@ -65,10 +56,23 @@ export async function endSession(session_id) {
   });
 }
 
-export async function chat(message) {
+// ---- Location + Chat ----
+export const getLocation = () =>
+  new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject("Not supported");
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => reject("Permission denied"),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 8000 }
+    );
+  });
+
+export async function chat(input) {
+  let location = null;
+  try { location = await getLocation(); } catch {}
   return await fetchJSON(`${API_BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message: input, location }),
   });
 }

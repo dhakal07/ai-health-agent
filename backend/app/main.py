@@ -1,6 +1,9 @@
 # backend/app/main.py
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+import os
+import requests
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -11,7 +14,7 @@ from app.core.config import settings
 from app.db.mongodb import sessions, answers, DB_MODE
 
 # ---------- FastAPI app & CORS ----------
-app = FastAPI(title="AI Health Agent API", version="1.2")
+app = FastAPI(title="AI Health Agent API", version="1.4")
 
 origins: List[str] = list({
     getattr(settings, "ALLOWED_ORIGIN", "http://localhost:5173"),
@@ -44,6 +47,7 @@ class EndSessionBody(BaseModel):
 
 class ChatBody(BaseModel):
     message: str
+    location: Optional[dict] = None  # { lat: float, lng: float } from browser
 
 # ---------- Routes ----------
 @app.get("/")
@@ -52,17 +56,10 @@ def root():
 
 @app.get("/health")
 def health():
-    """Report API and (best-effort) DB status + mode."""
-    try:
-        # works for both real client and memory shim
-        ok = True
-    except Exception:
-        ok = False
     return {"status": "ok", "db": (DB_MODE == "mongo"), "mode": DB_MODE}
 
 @app.post("/session/start")
 def start_session(body: StartSessionBody):
-    """Creates a session or returns HTTP 503 if DB is unavailable (no hanging)."""
     doc = {
         "locale": body.locale,
         "consent": body.consent,
@@ -73,13 +70,11 @@ def start_session(body: StartSessionBody):
         res = sessions.insert_one(doc)
     except PyMongoError as e:
         raise HTTPException(status_code=503, detail=f"database_unavailable: {e.__class__.__name__}")
-    # memory returns string id, pymongo returns ObjectId
     sid = getattr(res, "inserted_id", res)
     return {"session_id": str(sid)}
 
 @app.post("/answer")
 def post_answer(body: PostAnswerBody):
-    # accept memory ids (string) and real ObjectIds
     try:
         sid = ObjectId(body.session_id)
     except Exception:
@@ -112,17 +107,11 @@ def list_answers(session_id: str):
         docs = list(answers.find({"session_id": sid}).sort("created_at", 1))
     except PyMongoError as e:
         raise HTTPException(status_code=503, detail=f"database_unavailable: {e.__class__.__name__}")
-
     for d in docs:
         d.pop("_id", None)
     return {"ok": True, "answers": docs}
 
 def _score_and_note(items):
-    """
-    Very simple scoring:
-    - count of 'agree' style answers / total
-    - short, safe educational note (not diagnostic)
-    """
     total = len(items)
     agree_opts = {"Definitely agree", "Slightly agree"}
     score = sum(1 for a in items if (a.get("mapped_option") in agree_opts))
@@ -135,10 +124,9 @@ def _score_and_note(items):
     else:
         note = "You appear comfortable with change and flexible routines."
 
-    # keep the language educational and non-diagnostic
     guidance = (
         "This is an educational reflection based on your answers. "
-        "If you have concerns about your behavior or well-being, consider speaking with a qualified professional."
+        "If you have concerns about your well-being, consider speaking with a qualified professional."
     )
     return {"score": score, "total": total, "ratio": ratio, "note": note, "guidance": guidance}
 
@@ -170,7 +158,7 @@ def end_session(body: EndSessionBody):
     scoring = _score_and_note(items)
     return {"summary": summary, "analysis": scoring}
 
-# ---------- Smarter but safe /chat ----------
+# ---------- Triage + Google Places ----------
 DISCLAIMER = (
     "I'm an educational demo avatar, not a medical professional. "
     "I don't diagnose or provide personalized medical advice. "
@@ -181,21 +169,27 @@ EMERGENCY_SIGNS = [
     "severe chest pain", "crushing chest pain", "trouble breathing", "shortness of breath",
     "blue lips", "confusion", "cannot wake", "unconscious", "stroke", "numb on one side",
     "worst headache of my life", "suicidal", "suicide", "bleeding won't stop", "cant breathe",
+    "chest pain", "heart attack", "allergic reaction", "choking"
 ]
 
 def _contains_any(text: str, bag) -> bool:
     t = text.lower()
     return any(k in t for k in bag)
 
+def _is_emergency(text: str) -> bool:
+    return _contains_any(text, EMERGENCY_SIGNS)
+
 def _triage(text: str) -> str:
     t = text.lower().strip()
 
-    if _contains_any(t, EMERGENCY_SIGNS):
+    if _is_emergency(t):
+        # handled in /chat with location listing below
         return (
             f"{DISCLAIMER} Your message mentions potentially urgent warning signs. "
-            "Please call your local emergency number or go to the nearest emergency department now."
+            "Please call your local emergency number now."
         )
 
+    # common topics
     if any(k in t for k in ["fever", "cold", "cough", "sore throat", "flu", "runny nose", "congestion"]):
         return (
             f"{DISCLAIMER} For typical cold/flu: rest, fluids, and over-the-counter symptom relief can help. "
@@ -270,10 +264,97 @@ def _triage(text: str) -> str:
         "cold/flu, vaccines, nutrition, exercise, etc.)."
     )
 
+# -------- Google Places helper ----------
+PLACES_KEY = settings.GOOGLE_PLACES_API_KEY or os.getenv("GOOGLE_PLACES_API_KEY")
+
+def get_nearby_hospitals(lat: float, lng: float):
+    """Return up to 4 nearby hospitals using Google Places. Fallback to empty list on failure."""
+    if not PLACES_KEY:
+        return []
+    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    params = {
+        "location": f"{lat},{lng}",
+        "radius": 5000,          # 5 km
+        "type": "hospital",
+        "key": PLACES_KEY
+    }
+    try:
+        res = requests.get(url, params=params, timeout=6)
+        data = res.json()
+        results = data.get("results", [])[:4]
+        hospitals = []
+        for r in results:
+            name = r.get("name")
+            place_id = r.get("place_id")
+            # Build a Google Maps link
+            maps_url = f"https://www.google.com/maps/search/?api=1&query=Google&query_place_id={place_id}" if place_id else None
+            hospitals.append({
+                "name": name,
+                "maps_url": maps_url
+            })
+        return hospitals
+    except Exception:
+        return []
+
+# -------- Chat with emergency + Places + Llama (optional) ----------
+try:
+    import ollama  # optional; if not installed, we’ll handle
+    HAVE_OLLAMA = True
+except Exception:
+    HAVE_OLLAMA = False
+
+COUNTRY_EMERGENCY = "112"  # Finland (and EU)
+
 @app.post("/chat")
-def chat(body: ChatBody):
-    msg = (body.message or "").strip()
-    if not msg:
+async def chat(body: ChatBody):
+    user_input = (body.message or "").strip()
+    location = body.location or None
+
+    if not user_input:
         return {"ok": True, "answer": f"{DISCLAIMER} Please enter a short question or topic."}
-    answer = _triage(msg)
-    return {"ok": True, "answer": answer}
+
+    # Emergency handling with Places
+    if _is_emergency(user_input):
+        hospitals = []
+        if location and "lat" in location and "lng" in location:
+            hospitals = get_nearby_hospitals(float(location["lat"]), float(location["lng"]))
+        # Build hospital text block
+        if hospitals:
+            hos_text = "\n".join([f"• {h['name']} — [Open in Maps]({h['maps_url']})" if h.get("maps_url") else f"• {h['name']}" for h in hospitals])
+        else:
+            hos_text = "• (Nearby ERs will appear here when location is available.)"
+
+        return {
+            "ok": True,
+            "answer": (
+                f"EMERGENCY ALERT\n\n"
+                f"CALL {COUNTRY_EMERGENCY} IMMEDIATELY — DO NOT WAIT.\n\n"
+                f"Nearest ER:\n{hos_text}\n\n"
+                "Stay calm. Help is on the way."
+            ),
+            "hospitals": hospitals
+        }
+
+    # Non-emergency: rule-based triage first
+    rule = _triage(user_input)
+
+    # Optional: refine with a small local LLM if available
+    if HAVE_OLLAMA:
+        try:
+            resp = ollama.chat(model="llama3", messages=[
+                {"role": "system", "content": (
+                    "You are a friendly health educator. Educational advice only. "
+                    "Never diagnose. Keep answers under 3 sentences. "
+                    "Always include a gentle safety line if symptoms are severe: "
+                    f"'If symptoms are severe or sudden, call {COUNTRY_EMERGENCY}.'"
+                )},
+                {"role": "user", "content": user_input}
+            ])
+            llm = resp.get("message", {}).get("content", "")
+            if llm:
+                return {"ok": True, "answer": llm}
+        except Exception:
+            pass
+
+    # Fallback to rule-based
+    return {"ok": True, "answer": rule}
