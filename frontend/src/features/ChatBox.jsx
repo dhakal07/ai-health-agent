@@ -4,7 +4,7 @@ import { chat } from "../services/api/client";
 
 /**
  * Props:
- * - onSpeak?: (text: string) => void  // optional TTS hook from App (avatar voice)
+ *  - onSpeak?: (text: string) => void   // App will pass its speak() here
  */
 export default function ChatBox({ onSpeak }) {
   const [input, setInput] = useState("");
@@ -12,46 +12,68 @@ export default function ChatBox({ onSpeak }) {
     { role: "assistant", content: "Hi! I can share general wellness info. What’s on your mind?" }
   ]);
   const [sending, setSending] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+
+  const recRef = useRef(null);
   const scrollRef = useRef(null);
 
-  // auto-scroll to bottom
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
   }, [messages]);
 
-  async function send() {
-    const text = input.trim();
-    if (!text) return;
+  // --- TTS fallback if onSpeak not provided
+  function speakLocal(text) {
+    try { window.speechSynthesis.cancel(); } catch {}
+    const u = new SpeechSynthesisUtterance(text);
+    u.onstart = () => setSpeaking(true);
+    u.onend = () => setSpeaking(false);
+    u.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(u);
+  }
+  function stopVoice() {
+    try { window.speechSynthesis.cancel(); } catch {}
+    setSpeaking(false);
+  }
 
-    // optimistic add
-    const next = [...messages, { role: "user", content: text }];
-    setMessages(next);
+  // --- STT
+  function initRec() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert("SpeechRecognition not supported in this browser."); return null; }
+    const r = new SR();
+    r.lang = "en-US"; r.interimResults = true; r.maxAlternatives = 1;
+    r.onstart = () => setListening(true);
+    r.onend = () => setListening(false);
+    r.onerror = () => setListening(false);
+    r.onresult = (e) => {
+      let finalText = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
+      }
+      if (finalText) setInput(prev => (prev ? prev + " " : "") + finalText.trim());
+    };
+    return r;
+  }
+  function startMic() { if (!recRef.current) recRef.current = initRec(); recRef.current?.start(); }
+  function stopMic() { if (recRef.current && listening) recRef.current.stop(); }
+
+  async function send(customText) {
+    const text = (customText ?? input).trim();
+    if (!text) return;
+    setMessages(m => [...m, { role: "user", content: text }]);
     setInput("");
     setSending(true);
-
     try {
-      // send last 6 turns (lightweight “memory”)
-      const history = next.slice(-6);
-      const res = await chat(text, { history });
+      const res = await chat(text);
+      let reply = res?.answer || "Okay.";
+      const speakText = reply.replace(/<[^>]+>/g, " ");
+      if (typeof onSpeak === "function") onSpeak(speakText);
+      else speakLocal(speakText);
 
-      if (!res?.ok) {
-        setMessages(m => [...m, { role: "assistant", content: "Sorry, I couldn’t process that. Try again." }]);
-        return;
-      }
-
-      // Build a friendly response string + optional emergency hospitals.
-      let reply = res.answer || "Okay.";
-      if (res.emergency === true && Array.isArray(res.hospitals) && res.hospitals.length) {
-        const list = res.hospitals
-          .map(h => `• ${h.name}${h.distance ? ` (${h.distance})` : ""}${h.maps_url ? ` — [Open in Maps](${h.maps_url})` : ""}`)
-          .join("\n");
-        reply += `\n\nNearest ER options:\n${list}`;
-      }
-
-      setMessages(m => [...m, { role: "assistant", content: reply, hospitals: res.hospitals || null }]);
-
-      // speak it
-      if (typeof onSpeak === "function") onSpeak(reply);
+      setMessages(m => [
+        ...m,
+        { role: "assistant", content: reply, hospitals: res?.hospitals || null, follow_up: res?.follow_up || [] }
+      ]);
     } catch (e) {
       console.error(e);
       setMessages(m => [...m, { role: "assistant", content: "Network error. Please try again." }]);
@@ -61,85 +83,83 @@ export default function ChatBox({ onSpeak }) {
   }
 
   function onKey(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
   return (
     <div>
       <div
         ref={scrollRef}
-        style={{
-          border: "1px solid #eee",
-          borderRadius: 6,
-          padding: 10,
-          maxHeight: 260,
-          overflowY: "auto",
-          background: "#fafafa",
-        }}
+        style={{ border: "1px solid #eee", borderRadius: 6, padding: 10, maxHeight: 260, overflowY: "auto", background: "#fafafa" }}
       >
-        {messages.map((m, i) => (
-          <Message key={i} msg={m} />
-        ))}
+        {messages.map((m, i) => (<Message key={i} msg={m} onQuick={(q) => send(q)} />))}
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKey}
           rows={2}
-          placeholder="e.g., I have chest pain"
-          style={{ flex: 1, padding: 8, border: "1px solid #e5e7eb", borderRadius: 6 }}
+          placeholder="e.g., eye discomfort for 2 days"
+          style={{ flex: 1, padding: 8, border: "1px solid #e5e7eb", borderRadius: 6, minWidth: 240 }}
         />
-        <button onClick={send} disabled={sending} style={{ height: 40, alignSelf: "end" }}>
+        <button onClick={() => send()} disabled={sending} style={{ height: 40, alignSelf: "end" }}>
           {sending ? "Sending…" : "Ask"}
+        </button>
+        <button onClick={startMic} disabled={listening} title="Start mic" style={{ height: 40, alignSelf: "end" }}>
+          🎙️ Start
+        </button>
+        <button onClick={stopMic} disabled={!listening} title="Stop mic" style={{ height: 40, alignSelf: "end" }}>
+          ⏹️ Stop
+        </button>
+        <button onClick={stopVoice} disabled={!speaking} style={{ height: 40, alignSelf: "end", background: "#fee2e2" }}>
+          🛑 Stop Voice
         </button>
       </div>
     </div>
   );
 }
 
-function Message({ msg }) {
+function Message({ msg, onQuick }) {
   const isUser = msg.role === "user";
   return (
-    <div
-      style={{
-        margin: "8px 0",
-        display: "flex",
-        justifyContent: isUser ? "flex-end" : "flex-start",
-      }}
-    >
+    <div style={{ margin: "8px 0", display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
       <div
         style={{
-          maxWidth: 620,
-          whiteSpace: "pre-wrap",
-          border: "1px solid #e5e7eb",
-          background: isUser ? "#eef2ff" : "#fff",
-          color: "#111827",
-          padding: "8px 10px",
-          borderRadius: 8,
+          maxWidth: 620, whiteSpace: "pre-wrap",
+          border: "1px solid #e5e7eb", background: isUser ? "#eef2ff" : "#fff",
+          color: "#111827", padding: "8px 10px", borderRadius: 8,
         }}
       >
         <RenderWithLinks text={msg.content} />
-        {/* If hospitals were returned, render a clean list with real links */}
+
+        {/* Hospitals list */}
         {Array.isArray(msg.hospitals) && msg.hospitals.length > 0 && (
           <div style={{ marginTop: 8 }}>
             {msg.hospitals.map((h, idx) => (
               <div key={idx} style={{ marginBottom: 6 }}>
                 <strong>{h.name}</strong>
-                {h.distance ? <> — <span>{h.distance}</span></> : null}
-                {h.maps_url ? (
-                  <>
-                    {" · "}
-                    <a href={h.maps_url} target="_blank" rel="noreferrer">
-                      Open in Google Maps
-                    </a>
-                  </>
-                ) : null}
+                {h.maps_url ? <> · <a href={h.maps_url} target="_blank" rel="noreferrer">Open in Google Maps</a></> : null}
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* Follow-up questions as quick chips */}
+        {Array.isArray(msg.follow_up) && msg.follow_up.length > 0 && (
+          <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {msg.follow_up.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => onQuick && onQuick(q)}
+                style={{
+                  border: "1px solid #e5e7eb", background: "#f8fafc", padding: "4px 8px",
+                  borderRadius: 999, fontSize: 12, cursor: "pointer"
+                }}
+              >
+                {q}
+              </button>
             ))}
           </div>
         )}
@@ -148,7 +168,7 @@ function Message({ msg }) {
   );
 }
 
-/** Minimal markdown-ish linkifier for "(...)[https://...]" and raw https:// links */
+/** Linkify markdown-style [label](url) and raw https:// links */
 function RenderWithLinks({ text }) {
   const parts = linkify(text);
   return parts.map((p, i) =>
@@ -157,7 +177,6 @@ function RenderWithLinks({ text }) {
     )
   );
 }
-
 function linkify(str) {
   const out = [];
   const md = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
@@ -168,17 +187,13 @@ function linkify(str) {
     last = md.lastIndex;
   }
   if (last < str.length) out.push(str.slice(last));
-
-  // also raw URLs
   return out.flatMap(chunk => {
     if (typeof chunk !== "string") return chunk;
     const urlRe = /(https?:\/\/[^\s)]+)\b/g;
-    const parts = [];
-    let i = 0, u;
+    const parts = []; let i = 0, u;
     while ((u = urlRe.exec(chunk))) {
       if (u.index > i) parts.push(chunk.slice(i, u.index));
-      parts.push({ href: u[1], label: u[1] });
-      i = urlRe.lastIndex;
+      parts.push({ href: u[1], label: u[1] }); i = urlRe.lastIndex;
     }
     if (i < chunk.length) parts.push(chunk.slice(i));
     return parts;

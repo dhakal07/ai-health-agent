@@ -1,7 +1,4 @@
-/**
- * API client for the AI Health Agent frontend.
- * Reads VITE_API_BASE_URL from .env and falls back to localhost.
- */
+// frontend/src/services/api/client.js
 const envBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE;
 export const API_BASE = envBase && envBase.trim() ? envBase.trim() : "http://127.0.0.1:8000";
 
@@ -62,17 +59,17 @@ export const getLocation = () =>
     if (!navigator.geolocation) return reject("Not supported");
     navigator.geolocation.getCurrentPosition(
       pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => reject("Permission denied"),
+      () => resolve(null), // be lenient
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 8000 }
     );
   });
 
-export async function chat(input) {
+export async function chat(message /*, opts not used */) {
   let location = null;
   try { location = await getLocation(); } catch {}
   return await fetchJSON(`${API_BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: input, location }),
+    body: JSON.stringify({ message, location }),
   });
 }
