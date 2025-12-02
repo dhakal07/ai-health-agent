@@ -8,6 +8,7 @@ class StartSessionReq(BaseModel):
 class StartSessionResp(BaseModel):
     session_id: str
     questions_count: int
+session.py and analysis.py in models 
 
 class AnswerReq(BaseModel):
     session_id: str

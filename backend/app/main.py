@@ -108,26 +108,85 @@ def list_answers(session_id: str):
 
 @app.post("/session/end")
 def end_session(body: EndSessionBody):
+    """
+    End a screening session and return a simple, educational summary.
+
+    NOTE: This is NOT a diagnostic tool. It only reflects how many answers
+    were on the "agree" side for this short question set.
+    """
     sid = _get_sid(body.session_id)
     try:
         cursor = answers.find({"session_id": sid}).sort("created_at", 1)
-        items = [{"question_id": a.get("question_id"), "mapped_option": a.get("mapped_option")} for a in cursor]
-        sessions.update_one({"_id": sid}, {"$set": {"finished_at": datetime.utcnow()}})
+        items = [
+            {
+                "question_id": a.get("question_id"),
+                "mapped_option": a.get("mapped_option"),
+            }
+            for a in cursor
+        ]
+        sessions.update_one(
+            {"_id": sid},
+            {"$set": {"finished_at": datetime.utcnow()}}
+        )
     except PyMongoError as e:
         raise HTTPException(503, f"db_error: {e.__class__.__name__}")
 
     total = len(items)
-    agree = sum(1 for i in items if i.get("mapped_option") in {"Definitely agree", "Slightly agree"})
-    ratio = round(agree / total, 2) if total else 0
-    note = (
-        "Strong preference for routine." if ratio >= 0.8 else
-        "Moderate preference for structure." if ratio >= 0.5 else
-        "Comfortable with change."
+
+    # If nothing was answered, return an empty summary
+    if not total:
+        return {
+            "summary": {"count": 0, "answers": []},
+            "analysis": {
+                "score": 0,
+                "total": 0,
+                "ratio": 0.0,
+                "note": "No answers recorded.",
+                "guidance": (
+                    "It looks like no answers were saved for this session. "
+                    "You can repeat the screening whenever you are ready."
+                ),
+            },
+        }
+
+    agree_set = {"Definitely agree", "Slightly agree"}
+    score = sum(
+        1 for i in items
+        if i.get("mapped_option") in agree_set
     )
+    ratio = round(score / total, 2)
+
+    # Very simple interpretation based on routine-focused answers
+    if ratio >= 0.7:
+        note = "Many of your answers lean towards routine and sameness."
+        guidance = (
+            "Some people who strongly prefer routine also recognise traits that overlap with autism. "
+            "Only a professional who sees the whole picture can evaluate this properly."
+        )
+    elif ratio >= 0.4:
+        note = "Your answers show a mix of routine and flexibility."
+        guidance = (
+            "A mixed pattern is very common. If you have questions about autism or neurodiversity, "
+            "you can discuss your experiences with a health professional."
+        )
+    else:
+        note = "Your answers overall lean more towards flexibility and change."
+        guidance = (
+            "This short question set suggests more comfort with change, but it cannot rule anything out. "
+            "If you or someone close to you has ongoing concerns, a full assessment is still the right route."
+        )
+
     return {
         "summary": {"count": total, "answers": items},
-        "analysis": {"score": agree, "ratio": ratio, "note": note}
+        "analysis": {
+            "score": score,
+            "total": total,
+            "ratio": ratio,
+            "note": note,
+            "guidance": guidance,
+        },
     }
+
 
 # ---------- Emergency ----------
 EMERGENCY_KEYWORDS = [

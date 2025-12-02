@@ -1,47 +1,416 @@
-/* frontend/src/styles.css */
-:root {
-  --bg: #f7fafc;
-  --card: #ffffff;
-  --text: #0f172a;
-  --muted: #64748b;
-  --line: #e5e7eb;
-  --brand: #06b6d4;
-  --brand-2: #22d3ee;
-  --danger: #ef4444;
+/* ========== GLOBAL ========= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-* { box-sizing: border-box; }
-html, body, #root { height: 100%; }
-body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top left, #ecfdf5, #eff6ff 45%, #f9fafb);
+  color: #0f172a;
+}
 
-.layout {
-  max-width: 1280px; margin: 24px auto; padding: 16px;
-  display: grid; grid-template-columns: 420px 1fr; gap: 16px;
+/* make scrollbars unobtrusive */
+body {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5f5 transparent;
+}
+
+/* ========== GENERIC LAYOUT & CARDS ========= */
+
+main.layout {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 0 16px 32px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+main.layout.fullscreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 16px;
 }
 
 .card {
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
-.card-title { margin: 0 0 8px 0; font-size: 18px; }
-.muted { color: var(--muted); font-size: 14px; }
 
-.row { display: flex; }
-.gap { gap: 8px; }
-.input {
-  flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff;
+.card-title {
+  margin: 0 0 4px;
+  font-size: 1.2rem;
+  font-weight: 600;
 }
+
+/* basic rows */
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.row.header-row {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.row.gap {
+  gap: 8px;
+}
+
+/* muted text */
+
+.muted {
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+/* badges */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+/* blocks / answer display */
+
+.blk {
+  margin-top: 12px;
+}
+
+.answer {
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  font-size: 0.9rem;
+}
+
+/* ========== BUTTONS ========= */
+
 .btn {
-  border: 1px solid var(--brand); color: #03414a; background: #e6fcff;
-  padding: 8px 12px; border-radius: 10px; cursor: pointer;
+  border-radius: 999px;
+  padding: 8px 16px;
+  border: 1px solid #0f766e;
+  cursor: pointer;
+  font-size: 0.9rem;
+  background: white;
+  color: #0f172a;
+  transition: transform 0.08s ease, box-shadow 0.08s ease,
+    background-color 0.08s ease, color 0.08s ease, border-color 0.08s ease;
 }
-.btn:hover { background: var(--brand-2); color: #04333a; }
-.btn.light { border-color: var(--line); background: #fff; }
-.btn.danger { border-color: var(--danger); color: #7a1313; background: #ffecec; }
-.answer { margin-top: 10px; background: #fbfdff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
 
-.blk { margin-top: 10px; }
-.sum { cursor: pointer; font-weight: 600; }
-.bullets { margin: 8px 0 0 20px; }
-.badge { display: inline-block; padding: 2px 8px; background: #ecfeff; border: 1px solid var(--brand); border-radius: 999px; font-size: 12px; }
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.15);
+}
 
-.avatarBox { display: grid; gap: 8px; }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn.light {
+  border-color: rgba(148, 163, 184, 0.7);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0ea5e9, #22c55e);
+  border-color: transparent;
+  color: #f9fafb;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #0284c7, #16a34a);
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: #0f766e;
+}
+
+/* ========== HERO (CONSENT + MENU) ========= */
+
+.hero-card {
+  width: 100%;
+  max-width: 960px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 24px;
+  padding: 28px 28px 22px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.hero-title {
+  font-size: 1.9rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.hero-subtitle {
+  font-size: 1rem;
+  color: #4b5563;
+  margin-bottom: 16px;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.api-base {
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+
+/* menu grid */
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.big-card {
+  background: #f9fafb;
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+}
+
+.big-card h3 {
+  margin: 0 0 4px;
+}
+
+.big-card.accent {
+  background: linear-gradient(145deg, #eff6ff, #f0fdf4);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+/* ========== AUTISM VIEW ========= */
+
+.autism-page {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 0 16px 32px;
+}
+
+.autism-header {
+  margin-bottom: 16px;
+}
+
+.autism-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.left-side {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.right-side {
+  flex: 2;
+  position: sticky;
+  top: 16px;
+  height: fit-content;
+}
+
+/* avatar card */
+
+.small-avatar-card {
+  text-align: center;
+  padding: 16px 16px 14px;
+}
+
+.small-avatar-card img,
+.small-avatar-card svg {
+  max-width: 140px;
+  height: auto;
+}
+
+.avatar-controls {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.avatar-status {
+  margin-top: 6px;
+}
+
+/* questionnaire */
+
+.questionnaire-card {
+  padding: 18px 18px 16px;
+}
+
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-bar {
+  margin-top: 8px;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(56, 189, 248, 1) 0%,
+    rgba(59, 130, 246, 1) 35%,
+    rgba(94, 234, 212, 1) 100%
+  );
+  transition: width 0.25s ease;
+}
+
+.question-text {
+  margin-top: 12px;
+  margin-bottom: 10px;
+  font-size: 1.05rem;
+}
+
+/* answer options */
+
+.options-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.option-btn {
+  border-radius: 999px;
+  padding: 7px 14px;
+  border: 1px solid #cbd5f5;
+  background: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease,
+    border-color 0.1s ease, transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.option-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
+.selected-option {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #f9fafb;
+}
+
+/* controls */
+
+.controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+/* summary */
+
+.summary-card {
+  margin-top: 16px;
+  border-color: #4ade80;
+}
+
+/* ========== ASK AI VIEW SMALL TWEAKS ========= */
+
+.card.ask-card {
+  margin-top: 10px;
+}
+
+/* ========== RESPONSIVE ========= */
+
+@media (max-width: 960px) {
+  .autism-layout {
+    flex-direction: column;
+  }
+  .right-side {
+    position: static;
+  }
+  main.layout {
+    margin-top: 1.5rem;
+  }
+  .hero-card {
+    border-radius: 18px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-title {
+    font-size: 1.5rem;
+  }
+  .hero-card {
+    padding: 20px 18px 16px;
+  }
+}
+.btn.neutral {
+  border-color: rgba(148, 163, 184, 0.8);
+  background: #f9fafb;
+}
+
+.btn.neutral:hover {
+  background: #e5e7eb;
+}
+
+.btn-success {
+  background: #22c55e;
+  border-color: #16a34a;
+  color: #f9fafb;
+}
+
+.btn-success:hover {
+  background: #16a34a;
+}
+
+.btn-danger {
+  background: #ef4444;
+  border-color: #b91c1c;
+  color: #f9fafb;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
