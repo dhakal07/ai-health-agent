@@ -6,16 +6,19 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Segoe UI", sans-serif;
   background: radial-gradient(circle at top left, #ecfdf5, #eff6ff 45%, #f9fafb);
   color: #0f172a;
-}
 
-/* make scrollbars unobtrusive */
-body {
   scrollbar-width: thin;
   scrollbar-color: #cbd5f5 transparent;
 }
@@ -32,12 +35,13 @@ main.layout {
 }
 
 main.layout.fullscreen {
+  max-width: 100%;
+  margin: 0;
+  padding: 0 16px;
   min-height: 100vh;
   display: flex;
-  align-items: center;
   justify-content: center;
-  margin: 0;
-  padding: 16px;
+  align-items: stretch;
 }
 
 .card {
@@ -54,7 +58,7 @@ main.layout.fullscreen {
   font-weight: 600;
 }
 
-/* basic rows */
+/* rows */
 
 .row {
   display: flex;
@@ -64,10 +68,6 @@ main.layout.fullscreen {
 .row.header-row {
   justify-content: space-between;
   gap: 12px;
-}
-
-.row.gap {
-  gap: 8px;
 }
 
 /* muted text */
@@ -150,28 +150,68 @@ main.layout.fullscreen {
   color: #0f766e;
 }
 
+.btn.neutral {
+  border-color: rgba(148, 163, 184, 0.8);
+  background: #f9fafb;
+}
+
+.btn.neutral:hover {
+  background: #e5e7eb;
+}
+
+.btn-success {
+  background: #22c55e;
+  border-color: #16a34a;
+  color: #f9fafb;
+}
+
+.btn-success:hover {
+  background: #16a34a;
+}
+
+.btn-danger {
+  background: #ef4444;
+  border-color: #b91c1c;
+  color: #f9fafb;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
 /* ========== HERO (CONSENT + MENU) ========= */
 
 .hero-card {
   width: 100%;
   max-width: 960px;
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: 24px;
-  padding: 28px 28px 22px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: transparent;
+  border-radius: 0;
+  padding: 40px 16px 32px;
+  box-shadow: none;
+  border: none;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+
+  min-height: 100vh;
+  justify-content: center;
 }
 
 .hero-title {
-  font-size: 1.9rem;
-  font-weight: 700;
-  margin-bottom: 6px;
+  font-size: clamp(2.6rem, 4vw + 1rem, 3.5rem);
+  font-weight: 800;
+  margin-bottom: 12px;
+  color: #b91c1c;
+  letter-spacing: 0.02em;
 }
 
 .hero-subtitle {
-  font-size: 1rem;
-  color: #4b5563;
-  margin-bottom: 16px;
+  font-size: 1.05rem;
+  color: #374151;
+  margin-bottom: 20px;
+  max-width: 42rem;
 }
 
 .hero-actions {
@@ -179,6 +219,7 @@ main.layout.fullscreen {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 18px;
+  justify-content: center;
 }
 
 .api-base {
@@ -192,7 +233,7 @@ main.layout.fullscreen {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 18px;
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .big-card {
@@ -219,59 +260,77 @@ main.layout.fullscreen {
   padding: 0 16px 32px;
 }
 
-.autism-header {
+/* header without card */
+
+.autism-header-simple {
+  text-align: center;
   margin-bottom: 16px;
 }
 
-.autism-layout {
-  display: flex;
+.autism-header-simple .back-btn {
+  margin-bottom: 6px;
+}
+
+.autism-title {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #b91c1c;
+  margin: 4px 0 6px;
+}
+
+/* main card with avatar + questions */
+
+.autism-main-card {
+  margin-bottom: 16px;
+}
+
+.autism-main-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
   gap: 20px;
   align-items: flex-start;
 }
 
-.left-side {
-  flex: 3;
+/* avatar column */
+
+.autism-avatar-column {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
-.right-side {
-  flex: 2;
-  position: sticky;
-  top: 16px;
-  height: fit-content;
+.autism-avatar-column .small {
+  font-size: 0.85rem;
 }
 
-/* avatar card */
-
-.small-avatar-card {
-  text-align: center;
-  padding: 16px 16px 14px;
+.avatar-surface {
+  margin-top: 8px;
+  border-radius: 16px;
+  background: #f9fafb;
+  padding: 12px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.small-avatar-card img,
-.small-avatar-card svg {
-  max-width: 140px;
-  height: auto;
-}
-
-.avatar-controls {
+.avatar-controls-left {
   margin-top: 8px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
 }
 
-.avatar-status {
+.avatar-status-left {
   margin-top: 6px;
 }
 
-/* questionnaire */
+/* question column */
 
-.questionnaire-card {
-  padding: 18px 18px 16px;
+.autism-question-column {
+  display: flex;
+  flex-direction: column;
 }
+
+/* questionnaire styles */
 
 .question-header {
   display: flex;
@@ -306,7 +365,7 @@ main.layout.fullscreen {
   font-size: 1.05rem;
 }
 
-/* answer options */
+/* options + controls */
 
 .options-row {
   display: flex;
@@ -337,8 +396,6 @@ main.layout.fullscreen {
   color: #f9fafb;
 }
 
-/* controls */
-
 .controls-row {
   display: flex;
   flex-wrap: wrap;
@@ -354,63 +411,34 @@ main.layout.fullscreen {
   border-color: #4ade80;
 }
 
-/* ========== ASK AI VIEW SMALL TWEAKS ========= */
+/* educational panel card */
 
-.card.ask-card {
-  margin-top: 10px;
+.autism-panel-card {
+  margin-top: 8px;
 }
 
 /* ========== RESPONSIVE ========= */
 
 @media (max-width: 960px) {
-  .autism-layout {
-    flex-direction: column;
+  .autism-main-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .right-side {
-    position: static;
+
+  .autism-avatar-column {
+    max-width: 360px;
   }
+
   main.layout {
     margin-top: 1.5rem;
-  }
-  .hero-card {
-    border-radius: 18px;
-    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
   }
 }
 
 @media (max-width: 640px) {
-  .hero-title {
-    font-size: 1.5rem;
-  }
   .hero-card {
-    padding: 20px 18px 16px;
+    padding: 24px 12px 16px;
   }
-}
-.btn.neutral {
-  border-color: rgba(148, 163, 184, 0.8);
-  background: #f9fafb;
-}
 
-.btn.neutral:hover {
-  background: #e5e7eb;
-}
-
-.btn-success {
-  background: #22c55e;
-  border-color: #16a34a;
-  color: #f9fafb;
-}
-
-.btn-success:hover {
-  background: #16a34a;
-}
-
-.btn-danger {
-  background: #ef4444;
-  border-color: #b91c1c;
-  color: #f9fafb;
-}
-
-.btn-danger:hover {
-  background: #b91c1c;
+  .hero-title {
+    font-size: 2.1rem;
+  }
 }

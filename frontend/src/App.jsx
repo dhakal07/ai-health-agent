@@ -1,4 +1,3 @@
-// frontend/src/App.jsx
 import { useEffect, useRef, useState } from "react";
 import questions from "./features/aq/questions.json";
 import {
@@ -481,17 +480,15 @@ export default function App() {
     );
   }
 
-    // ---------- AUTISM VIEW ----------
+  // ---------- AUTISM VIEW ----------
   return (
     <main className="autism-page">
-      {/* Header with title + back button */}
-      <div className="card autism-header">
-        <div className="row header-row">
-          <h2 className="card-title">Autism Screening (Voice-Guided)</h2>
-          <button className="btn light" onClick={() => setView("menu")}>
-            ← Back to menu
-          </button>
-        </div>
+      {/* Header (no card) */}
+      <div className="autism-header-simple">
+        <button className="btn light back-btn" onClick={() => setView("menu")}>
+          ← Back to menu
+        </button>
+        <h2 className="autism-title">Autism Screening (Voice-Guided)</h2>
         <p className="muted">
           This short screening is <strong>educational only</strong> and not a
           diagnosis. Try to answer based on your everyday preferences. You can
@@ -499,29 +496,34 @@ export default function App() {
         </p>
       </div>
 
-      {/* Main two-column layout */}
-      <div className="autism-layout">
-        {/* LEFT SIDE: avatar + questionnaire */}
-        <div className="left-side">
-          <div className="card small-avatar-card">
+      {/* ONE main card: avatar left + questions right */}
+      <div className="card autism-main-card">
+        <div className="autism-main-grid">
+          {/* Avatar column */}
+          <div className="autism-avatar-column">
             <h3 className="card-title">Autism Screening Assistant</h3>
-            <DoctorAvatar
-              queueSay={(text) => speak(text)}
-              speakingText={speakingText}
-            />
+            <p className="muted small">Your AI Health Agent</p>
 
-            <div className="avatar-controls">
+            <div className="avatar-surface">
+              <DoctorAvatar
+                queueSay={(text) => speak(text)}
+                speakingText={speakingText}
+              />
+            </div>
+
+            <div className="avatar-controls avatar-controls-left">
               <button className="btn light" onClick={stopSpeak}>
                 🔇 Stop Voice
               </button>
             </div>
 
-            <div className="avatar-status">
+            <div className="avatar-status avatar-status-left">
               <span className="badge">{status}</span>
             </div>
           </div>
 
-          <div className="card questionnaire-card">
+          {/* Question column */}
+          <div className="autism-question-column">
             <div className="question-header">
               <strong>Question {progress}</strong>
               <span className="badge">
@@ -529,7 +531,6 @@ export default function App() {
               </span>
             </div>
 
-            {/* progress bar */}
             <div className="progress-bar">
               <div
                 className="progress-fill"
@@ -553,65 +554,65 @@ export default function App() {
               ))}
             </div>
 
-                      <div className="controls-row">
-            <button
-              className="btn ghost"
-              onClick={() =>
-                speak(
-                  `${question.text} You can say: Definitely agree, Slightly agree, Slightly disagree, or Definitely disagree.`
-                )
-              }
-            >
-              Ask
-            </button>
-            <button
-              className="btn btn-success"
-              onClick={startListening}
-              disabled={listening}
-            >
-              Start
-            </button>
-            <button
-              className="btn btn-danger"
-              onClick={stopListening}
-              disabled={!listening}
-            >
-              Stop
-            </button>
-            <button
-              className="btn neutral"
-              onClick={goPrev}
-              disabled={idx === 0}
-            >
-              Back
-            </button>
-            <button className="btn ghost" onClick={skip}>
-              Skip
-            </button>
-            <button
-              className="btn neutral"
-              onClick={goNext}
-              disabled={idx === questions.length - 1}
-            >
-              Next
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleConfirm}
-              disabled={selected === "(none)"}
-            >
-              Confirm
-            </button>
-            <button className="btn btn-primary" onClick={finish}>
-              Finish
-            </button>
-          </div>
-
+            <div className="controls-row">
+              <button
+                className="btn ghost"
+                onClick={() =>
+                  speak(
+                    `${question.text} You can say: Definitely agree, Slightly agree, Slightly disagree, or Definitely disagree.`
+                  )
+                }
+              >
+                Ask
+              </button>
+              <button
+                className="btn btn-success"
+                onClick={startListening}
+                disabled={listening}
+              >
+                Start
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={stopListening}
+                disabled={!listening}
+              >
+                Stop
+              </button>
+              <button
+                className="btn neutral"
+                onClick={goPrev}
+                disabled={idx === 0}
+              >
+                Back
+              </button>
+              <button className="btn ghost" onClick={skip}>
+                Skip
+              </button>
+              <button
+                className="btn neutral"
+                onClick={goNext}
+                disabled={idx === questions.length - 1}
+              >
+                Next
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleConfirm}
+                disabled={selected === "(none)"}
+              >
+                Confirm
+              </button>
+              <button className="btn btn-primary" onClick={finish}>
+                Finish
+              </button>
+            </div>
 
             <div className="blk">
               <div className="muted">Transcript</div>
               <div className="answer">{transcript || "(none)"}</div>
             </div>
+
             <div className="blk">
               <div className="muted">Detected Answer</div>
               <div className="answer">{selected}</div>
@@ -635,11 +636,11 @@ export default function App() {
             )}
           </div>
         </div>
+      </div>
 
-        {/* RIGHT SIDE: autism educational panel */}
-        <div className="right-side">
-          <AutismPanel />
-        </div>
+      {/* Autism focus info as a single clean card below */}
+      <div className="card autism-panel-card">
+        <AutismPanel />
       </div>
     </main>
   );
