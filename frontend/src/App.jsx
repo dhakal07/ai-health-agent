@@ -236,8 +236,11 @@ export default function App() {
       setSummary(null);
       setView("autism");
       setStatus("Ready");
+
+      // NEW: include the first question in the initial speech
+      const firstQuestionText = questions[0]?.text || "";
       speak(
-        "Welcome to the autism-focused screening area. I will read each question, and you can answer by voice or by clicking. You can also skip or go back if you need to."
+        `Welcome to the autism-focused screening area. I will read each question, and you can answer by voice or by clicking. You can also skip or go back if you need to. Now let's start with the first question: ${firstQuestionText}`
       );
     } catch (e) {
       console.error(e);
@@ -340,8 +343,8 @@ export default function App() {
           </p>
 
           <p className="muted">
-            This prototype uses speech and AI for <strong>education only</strong
-            >. It does not replace real medical care. Please avoid sharing your
+            This prototype uses speech and AI for <strong>education only</strong>
+            . It does not replace real medical care. Please avoid sharing your
             full name, ID numbers, or emergency situations here.
           </p>
 
